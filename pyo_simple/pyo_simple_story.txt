@@ -1,0 +1,38 @@
+📐 Model Matematis (Product Mix: Meja & Kursi)
+🔸 Variabel Keputusan:
+𝑥
+x: jumlah meja yang diproduksi
+
+𝑦
+y: jumlah kursi yang diproduksi
+(keduanya ≥ 0)
+
+🔸 Fungsi Objektif:
+Kita ingin memaksimalkan profit total:
+
+Maksimalkan 
+𝑍=40𝑥+30𝑦
+Maksimalkan Z=40x+30y
+Meja menghasilkan keuntungan Rp40/unit
+Kursi menghasilkan Rp30/unit
+
+🔸 Batasan (Constraints):
+Batas waktu kerja:
+Setiap meja butuh 2 jam, kursi 1 jam. Total waktu tersedia 100 jam.
+2x+y≤100
+
+Batas bahan baku:
+Meja butuh 3 unit bahan, kursi 2 unit. Total bahan tersedia 120 unit.
+3𝑥+2𝑦≤120
+
+Non-negatif (logis, tidak bisa bikin barang negatif):
+𝑥≥0,𝑦≥0
+
+Jadi, rangkuman model matematisnya:
+Maksimalkan:
+𝑍=40𝑥+30𝑦
+
+dengan syarat:
+2𝑥+𝑦≤100
+3𝑥+2𝑦≤120
+𝑥≥0,𝑦≥0
