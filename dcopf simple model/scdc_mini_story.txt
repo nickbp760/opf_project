@@ -1,0 +1,9 @@
+📦 Versi Mini SCDC (3 Bus, 2 Generator, 2 Jam)
+🔧 Fitur Mini Ini:
+3 Bus: Bus1, Bus2, Bus3
+
+2 Generator (G1 di Bus1, G2 di Bus2)
+Beban hanya di Bus3 (150 MW jam ke-1, 100 MW jam ke-2)
+Jalur transmisi: Bus1 → Bus3 dan Bus2 → Bus3
+Sudah ada power flow, pembangkitan, batasan aliran, keseimbangan daya
+Tujuan: minimalkan biaya pembangkitan
