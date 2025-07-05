@@ -55,7 +55,7 @@ branch_data_raw = {
     ('Bus2', 'Bus3'): {'x': 0.1, 'Limit': 120}
 }
 # Pij = 1/xij⋅(δi​−δj)
-# 0.1 berarti xij adalah 10
+# 0.1 berarti x bij adalah 10
 # xij : reaktansi jalur dari bus i ke bus j (hambatan)
 # Jalur dari Bus1 ke Bus3 hanya boleh dilewati maksimal 100 MW, baik ke arah Bus3 atau sebaliknya (tergantung tanda delta).
 
@@ -63,10 +63,17 @@ model.branch_x = pyo.Param(model.branch, initialize=lambda m, i, j: branch_data_
 model.branch_Limit = pyo.Param(model.branch, initialize=lambda m, i, j: branch_data_raw[(i, j)]['Limit'])
 model.bij = pyo.Param(model.branch, initialize=lambda m, i, j: 1 / m.branch_x[i, j])
 
+# misal Var(set, waktu) itu bakal bikin 2D nilai yang perlu ditemukan
+# misal set jumlahnya 3 dan waktu ada 2, maka akan ada 6 nilai yang harus ditemukan
+# Daya yang dibangkitkan oleh generator g pada waktu t
 model.Pg = pyo.Var(model.Gen, model.t, domain=pyo.NonNegativeReals)
+# Aliran daya dari bus i ke j di waktu t
 model.Pij = pyo.Var(model.branch, model.t, domain=pyo.Reals)
+# Sudut tegangan (fase) bus b pada waktu t
 model.delta = pyo.Var(model.bus, model.t, domain=pyo.Reals, bounds=(-3.14, 3.14))
+# Biaya pembangkitan total di waktu t
 model.cost = pyo.Var(model.t, domain=pyo.NonNegativeReals)
+# Objective Function (biaya total seluruh waktu)
 model.OF = pyo.Var(domain=pyo.NonNegativeReals)
 
 def power_flow_eq(m, i, j, t):
