@@ -1,0 +1,36 @@
+Mini Model Power System (3 Bus, 2 Generator, 1 Load)
+🧱 Komponen:
+Bus1 dan Bus2 punya pembangkit:
+G1 di Bus1 (maks. 100 MW)
+G2 di Bus2 (maks. 100 MW)
+Bus3 butuh listrik sebesar 150 MW
+Ada dua jalur transmisi:
+Dari Bus1 → Bus3
+Dari Bus2 → Bus3
+
+🎯 Tujuan Model:
+Tentukan berapa masing-masing pembangkit (G1 dan G2) harus menghasilkan daya, supaya:
+Total pembangkitan = 150 MW (cukup untuk Bus3),
+Biaya seminimal mungkin,
+Tidak melanggar batas kapasitas.
+
+🔢 Contoh Model Matematis:
+Misal:
+
+Biaya G1: 
+Biaya=10×𝑃1​
+ 
+Biaya G2: 
+Biaya=20×𝑃2
+
+Modelnya:
+Minimalkan 
+𝑍=10𝑃1+20𝑃2
+
+Dengan syarat:
+𝑃1+𝑃2=150
+(kebutuhan beban)
+0≤𝑃1≤100
+(batas G1)
+0≤𝑃2≤100
+(batas G2)
