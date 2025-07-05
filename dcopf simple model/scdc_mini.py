@@ -3,32 +3,62 @@ import pyomo.environ as pyo
 
 model = pyo.ConcreteModel(name="Mini_SCDC")
 
+# set digunakan untuk mendefinisikan himpunan
 model.bus = pyo.Set(initialize=['Bus1', 'Bus2', 'Bus3'])
 model.Gen = pyo.Set(initialize=['G1', 'G2'])
 model.t = pyo.Set(initialize=[1, 2], ordered=True)
 model.branch = pyo.Set(initialize=[('Bus1', 'Bus3'), ('Bus2', 'Bus3')], dimen=2)
 model.GB = pyo.Set(initialize=[('Bus1', 'G1'), ('Bus2', 'G2')], dimen=2)
+# slack adalah acuan untuk bus
+# Pij =bij⋅(δi​−δj​)
 model.slack = pyo.Set(initialize=['Bus1'])
 
 model.Sbase = pyo.Param(initialize=100)
 
+# param adalah nilai pada himpunan
+# misalnya set generator memiliki nilai parameter seperti a, b, c, Pmin, Pmax, RU, RD
 gen_data = {
     'G1': {'a': 0.0, 'b': 10, 'c': 0, 'Pmin': 0, 'Pmax': 100, 'RU': 100, 'RD': 100},
     'G2': {'a': 0.0, 'b': 20, 'c': 0, 'Pmin': 0, 'Pmax': 100, 'RU': 100, 'RD': 100}
 }
 model.GD = pyo.Param(model.Gen, ['a', 'b', 'c', 'Pmin', 'Pmax', 'RU', 'RD'],
                      initialize=lambda m, g, p: gen_data[g][p])
+print("Generator Data (GD):", model.GD)
+# lambda untuk mengakses data generator, m adalah model yang merupakan format pyomo
+# m.GD[g, 'a'] mengakses parameter 'a' dari generator g
+# contoh Biaya(P)=a⋅P^2+b⋅P+c
+# Pmin = 0 → tidak ada daya minimum
+# Pmax = 100 → tidak boleh menghasilkan lebih dari 100 MW
+# P[t=1] = 50 MW
+# RU = 20 MW
+# RD = 10 MW
+# 40 <= p[t=2] <= 70
+#Daya yang dihasilkan oleh pembangkit bisa naik atau turun karena:
+# 🔹 1. Perubahan Beban (Load)
+# Saat konsumsi listrik naik (misal siang hari), daya harus naik.
+# Saat malam atau rendah pemakaian, daya bisa turun.
+# 🔹 2. Perubahan kondisi sistem
+# Tambahan pembangkitan dari renewable (matahari, angin)
+# Gangguan sistem (trip, overload)
 
 bus_demand_raw = {
     ('Bus1', 1): 0, ('Bus2', 1): 0, ('Bus3', 1): 150,
     ('Bus1', 2): 0, ('Bus2', 2): 0, ('Bus3', 2): 100
 }
+# Ini adalah dictionary Python yang menyatakan:
+# Berapa banyak beban listrik (dalam MW) yang dibutuhkan di setiap bus untuk setiap waktu.
 model.BusData_pd = pyo.Param(model.bus, model.t, initialize=bus_demand_raw, default=0)
+print("BusData_pd:", model.BusData_pd)
 
 branch_data_raw = {
     ('Bus1', 'Bus3'): {'x': 0.1, 'Limit': 100},
-    ('Bus2', 'Bus3'): {'x': 0.1, 'Limit': 100}
+    ('Bus2', 'Bus3'): {'x': 0.1, 'Limit': 120}
 }
+# Pij = 1/xij⋅(δi​−δj)
+# 0.1 berarti xij adalah 10
+# xij : reaktansi jalur dari bus i ke bus j (hambatan)
+# Jalur dari Bus1 ke Bus3 hanya boleh dilewati maksimal 100 MW, baik ke arah Bus3 atau sebaliknya (tergantung tanda delta).
+
 model.branch_x = pyo.Param(model.branch, initialize=lambda m, i, j: branch_data_raw[(i, j)]['x'])
 model.branch_Limit = pyo.Param(model.branch, initialize=lambda m, i, j: branch_data_raw[(i, j)]['Limit'])
 model.bij = pyo.Param(model.branch, initialize=lambda m, i, j: 1 / m.branch_x[i, j])
