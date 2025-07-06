@@ -14,7 +14,7 @@ def create_dcopf_model():
     # DATA LOADING FROM EXCEL
     # =============================================================================
     print("0. Loading data from dcopf_data.xlsx...")
-    data_file = 'dcopf_data.xlsx'
+    data_file = './dcopf/dcopf_data.xlsx'
 
     # Load data from each sheet into pandas DataFrames
     branch_df = pd.read_excel(data_file, sheet_name='branch_data')
