@@ -51,3 +51,14 @@ Untuk setiap ( 𝑖 , 𝑗 ) ∈ 𝐿 , 𝑡 ∈ 𝑇 (i,j)
 Bus Referensi (Slack Bus)
 Untuk semua waktu 𝑡
 δBus1,t​=0
+
+----------------------------------UPGRADED----------------------------------------
+Ramp-Up Constraint
+P(g​,t)−P(g,t−1) ≤ RU(g) / Sbase​​​
+
+Ramp-Down Constraint
+P(g​,t−1)−P(g​,t) ≤ ​RD(g) / Sbase​
+
+Cost Piece Wise
+Fungsi Biaya Thermal per Waktu
+cost(t)=g∈Gen∑​[Mincost(g)​+k∈K∑​Slope(g,k)​⋅Pk(g,t,k)​]​​
