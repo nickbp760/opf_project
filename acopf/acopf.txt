@@ -1,0 +1,2 @@
+# mirip dengan scdc_mini.py
+# bedanya, disini kita menggunakan r yang biasa terjadi di AC-OPF
