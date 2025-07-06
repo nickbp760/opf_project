@@ -1,8 +1,11 @@
 # simpan file ini sebagai scdc_mini.py
 import pyomo.environ as pyo
 
+# Buat model Pyomo
+print("1 .Buat model Pyomo")
 model = pyo.ConcreteModel(name="Mini_SCDC")
-
+# --------------------------------------------------------------------------------------
+print("2 .Definisikan Set")
 # set digunakan untuk mendefinisikan himpunan
 model.bus = pyo.Set(initialize=['Bus1', 'Bus2', 'Bus3'])
 model.Gen = pyo.Set(initialize=['G1', 'G2'])
@@ -12,7 +15,9 @@ model.GB = pyo.Set(initialize=[('Bus1', 'G1'), ('Bus2', 'G2')], dimen=2)
 # slack adalah acuan untuk bus
 model.slack = pyo.Set(initialize=['Bus1'])
 model.Sbase = pyo.Param(initialize=100)
-
+# --------------------------------------------------------------------------------------
+print("3 .Definisikan Parameter Set")
+# Tujuan Param dan set agar nilai2 pada persamaan bisa dinamis
 # param adalah nilai pada himpunan
 # misalnya set generator memiliki nilai parameter seperti a, b, c, Pmin, Pmax, RU, RD
 gen_data = {
@@ -21,7 +26,6 @@ gen_data = {
 }
 model.GD = pyo.Param(model.Gen, ['a', 'b', 'c', 'Pmin', 'Pmax', 'RU', 'RD'],
                      initialize=lambda m, g, p: gen_data[g][p])
-print("Generator Data (GD):", model.GD)
 # lambda untuk mengakses data generator, m adalah model yang merupakan format pyomo
 # m.GD[g, 'a'] mengakses parameter 'a' dari generator g
 # Pmin = 0 → tidak ada daya minimum
@@ -45,8 +49,6 @@ bus_demand_raw = {
 # Ini adalah dictionary Python yang menyatakan:
 # Berapa banyak beban listrik (dalam MW) yang dibutuhkan di setiap bus untuk setiap waktu.
 model.BusData_pd = pyo.Param(model.bus, model.t, initialize=bus_demand_raw, default=0)
-print("BusData_pd:", model.BusData_pd)
-
 branch_data_raw = {
     ('Bus1', 'Bus3'): {'x': 0.1, 'Limit': 100},
     ('Bus2', 'Bus3'): {'x': 0.1, 'Limit': 120}
@@ -57,7 +59,8 @@ branch_data_raw = {
 model.branch_x = pyo.Param(model.branch, initialize=lambda m, i, j: branch_data_raw[(i, j)]['x'])
 model.branch_Limit = pyo.Param(model.branch, initialize=lambda m, i, j: branch_data_raw[(i, j)]['Limit'])
 model.bij = pyo.Param(model.branch, initialize=lambda m, i, j: 1 / m.branch_x[i, j])
-
+# --------------------------------------------------------------------------------------
+print("4 .Definisikan Variable")
 # misal Var(set, waktu) itu bakal bikin 2D nilai yang perlu ditemukan
 # misal set jumlahnya 3 dan waktu ada 2, maka akan ada 6 nilai yang harus ditemukan
 # Daya yang dibangkitkan oleh generator g pada waktu t
@@ -70,7 +73,9 @@ model.delta = pyo.Var(model.bus, model.t, domain=pyo.Reals, bounds=(-3.14, 3.14)
 model.cost = pyo.Var(model.t, domain=pyo.NonNegativeReals)
 # Objective Function (biaya total seluruh waktu)
 model.OF = pyo.Var(domain=pyo.NonNegativeReals)
-
+# Data2 yang perlu ditemukan
+# --------------------------------------------------------------------------------------
+print("5 .Definisikan Constraint Function")
 # Pij = 1/xij⋅(δi​−δj)
 # 0.1 berarti x bij adalah 10
 def power_flow_eq(m, i, j, t):
@@ -118,13 +123,16 @@ model.cost_thermal = pyo.Constraint(model.t, rule=cost_calc)
 # Jumlah total biaya dari seluruh waktu (misalnya 24 jam) disimpan dalam satu variabel OF
 # yang kemudian dijadikan tujuan optimasi (objective function).
 model.total_cost = pyo.Constraint(expr=model.OF == sum(model.cost[t] for t in model.t))
+# --------------------------------------------------------------------------------------
+print("6 .Definisikan Objective Function")
 model.objective = pyo.Objective(expr=model.OF, sense=pyo.minimize)
 
 # ======= Jalankan Solver =========
 solver = pyo.SolverFactory('glpk')
-results = solver.solve(model, tee=True)
+results = solver.solve(model, tee=False) # tee=True untuk menampilkan output solver
 
 # Tampilkan hasil
+print("\n=== Hasil Optimasi ===")
 for t in model.t:
     print(f"\n=== Jam {t} ===")
     for g in model.Gen:
