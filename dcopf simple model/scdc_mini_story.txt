@@ -36,10 +36,18 @@ Fungsi Biaya Thermal per Waktu:
 costt​ = g∈G∑​( a(g)​⋅ (P(g,t) ​⋅ Sbase​) ^ 2 + b(g)​ ⋅ (P(g,t) ​⋅ Sbase​) + c(g​))
 
 Keseimbangan Daya (Power Balance):
-∑​P(g,t) ​− ​Load(b,t) / Sbase ​​= j∣(b,j)∈L∑​ P(bj,t) ​− j∣(j,b)∈L∑ ​P(jb,t)​
+∑​P(g,t) ​− ​Load(b,t) / Sbase ​​= j∣(b,j)∈L∑​P(bj,t) ​− j∣(j,b)∈L∑P(jb,t)​
 
-​Persamaan Aliran Daya (DC Power Flow) Untuk setiap ( 𝑖 , 𝑗 ) ∈ 𝐿 , 𝑡 ∈ 𝑇 (i,j)∈L,t∈T:
+​Persamaan Aliran Daya (DC Power Flow) Untuk setiap ( 𝑖 , 𝑗 ) ∈ 𝐿 , 𝑡 ∈ 𝑇:
 Pi(j,t) ​= b(ij) ​⋅(δ(i,t) ​− δ(j,t)), dengan b(ij) ​ = 1 / x(ij)
 
-Batasan Generator Untuk setiap 𝑔 ∈ 𝐺 , 𝑡 ∈ 𝑇 g∈G,t∈T:
+Batasan Generator Untuk setiap 𝑔 ∈ 𝐺 , 𝑡 ∈ 𝑇:
 Sbase ​Pgmin ​​≤ P(g,t​) ≤ Sbase ​Pgmax​​
+
+Batasan Aliran Daya Jalur
+Untuk setiap ( 𝑖 , 𝑗 ) ∈ 𝐿 , 𝑡 ∈ 𝑇 (i,j)
+− ​Limitij / Sbase ​​≤ P(ij,t) ​≤ ​Limitij / Sbase​​
+
+Bus Referensi (Slack Bus)
+Untuk semua waktu 𝑡
+δBus1,t​=0
