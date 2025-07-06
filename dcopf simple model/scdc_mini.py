@@ -10,9 +10,7 @@ model.t = pyo.Set(initialize=[1, 2], ordered=True)
 model.branch = pyo.Set(initialize=[('Bus1', 'Bus3'), ('Bus2', 'Bus3')], dimen=2)
 model.GB = pyo.Set(initialize=[('Bus1', 'G1'), ('Bus2', 'G2')], dimen=2)
 # slack adalah acuan untuk bus
-# Pij =bij⋅(δi​−δj​)
 model.slack = pyo.Set(initialize=['Bus1'])
-
 model.Sbase = pyo.Param(initialize=100)
 
 # param adalah nilai pada himpunan
@@ -26,7 +24,6 @@ model.GD = pyo.Param(model.Gen, ['a', 'b', 'c', 'Pmin', 'Pmax', 'RU', 'RD'],
 print("Generator Data (GD):", model.GD)
 # lambda untuk mengakses data generator, m adalah model yang merupakan format pyomo
 # m.GD[g, 'a'] mengakses parameter 'a' dari generator g
-# contoh Biaya(P)=a⋅P^2+b⋅P+c
 # Pmin = 0 → tidak ada daya minimum
 # Pmax = 100 → tidak boleh menghasilkan lebih dari 100 MW
 # P[t=1] = 50 MW
@@ -54,8 +51,6 @@ branch_data_raw = {
     ('Bus1', 'Bus3'): {'x': 0.1, 'Limit': 100},
     ('Bus2', 'Bus3'): {'x': 0.1, 'Limit': 120}
 }
-# Pij = 1/xij⋅(δi​−δj)
-# 0.1 berarti x bij adalah 10
 # xij : reaktansi jalur dari bus i ke bus j (hambatan)
 # Jalur dari Bus1 ke Bus3 hanya boleh dilewati maksimal 100 MW, baik ke arah Bus3 atau sebaliknya (tergantung tanda delta).
 
@@ -76,35 +71,47 @@ model.cost = pyo.Var(model.t, domain=pyo.NonNegativeReals)
 # Objective Function (biaya total seluruh waktu)
 model.OF = pyo.Var(domain=pyo.NonNegativeReals)
 
+# Pij = 1/xij⋅(δi​−δj)
+# 0.1 berarti x bij adalah 10
 def power_flow_eq(m, i, j, t):
     return m.Pij[i, j, t] == m.bij[i, j] * (m.delta[i, t] - m.delta[j, t])
 model.const1 = pyo.Constraint(model.branch, model.t, rule=power_flow_eq)
 
+# Daya masuk = daya keluar + beban
+# hukum kirchoff
 def power_balance(m, b, t):
     gen = sum(m.Pg[g, t] for g in m.Gen if (b, g) in m.GB)
     load = m.BusData_pd[b, t] / m.Sbase
     flow_out = sum(m.Pij[b, j, t] for j in m.bus if (b, j) in m.branch)
+    # flow_out = 0 (karena Bus3 tidak punya jalur keluar ke tempat lain)
     flow_in = sum(m.Pij[j, b, t] for j in m.bus if (j, b) in m.branch)
     return gen - load == flow_out - flow_in
 model.const2 = pyo.Constraint(model.bus, model.t, rule=power_balance)
 
+# Pg[g, t] <= Pmax
 model.pg_max = pyo.Constraint(model.Gen, model.t, rule=lambda m, g, t: m.Pg[g, t] <= m.GD[g, 'Pmax'] / m.Sbase)
+# Pg[g, t] >= Pmin
 model.pg_min = pyo.Constraint(model.Gen, model.t, rule=lambda m, g, t: m.Pg[g, t] >= m.GD[g, 'Pmin'] / m.Sbase)
 
+# Bus1 adalah bus referensi, jadi sudutnya selalu 0
 for t in model.t:
     model.delta['Bus1', t].fix(0)
 
 def pij_bounds(m, i, j, t):
     limit = m.branch_Limit[i, j] / m.Sbase
+    # −Limit ij ≤P ij (t)≤ Limit ij
     return pyo.inequality(-limit, m.Pij[i, j, t], limit)
 model.pij_bounds = pyo.Constraint(model.branch, model.t, rule=pij_bounds)
 
+# contoh Biaya(P)=a⋅P^2+b⋅P+c
 def cost_calc(m, t):
     return m.cost[t] == sum(m.GD[g, 'a'] * (m.Pg[g, t] * m.Sbase)**2 +
                             m.GD[g, 'b'] * (m.Pg[g, t] * m.Sbase) +
                             m.GD[g, 'c'] for g in m.Gen)
 model.cost_thermal = pyo.Constraint(model.t, rule=cost_calc)
 
+# Jumlah total biaya dari seluruh waktu (misalnya 24 jam) disimpan dalam satu variabel OF
+# yang kemudian dijadikan tujuan optimasi (objective function).
 model.total_cost = pyo.Constraint(expr=model.OF == sum(model.cost[t] for t in model.t))
 model.objective = pyo.Objective(expr=model.OF, sense=pyo.minimize)
 
@@ -116,7 +123,6 @@ results = solver.solve(model, tee=True)
 for t in model.t:
     print(f"\n=== Jam {t} ===")
     for g in model.Gen:
-        # print(f"{g}: {pyo.value(model.Pg[g, t]) * model.Sbase:.2f} MW")
         print(f"{g}: {pyo.value(model.Pg[g, t]) * pyo.value(model.Sbase):.2f} MW")
     print(f"Total Cost @t{t}: Rp {pyo.value(model.cost[t]):,.2f}")
 

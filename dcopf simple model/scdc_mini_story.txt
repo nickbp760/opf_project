@@ -7,3 +7,39 @@ Beban hanya di Bus3 (150 MW jam ke-1, 100 MW jam ke-2)
 Jalur transmisi: Bus1 → Bus3 dan Bus2 → Bus3
 Sudah ada power flow, pembangkitan, batasan aliran, keseimbangan daya
 Tujuan: minimalkan biaya pembangkitan
+
+Pada Image bukan hasil optimasi, tapi salah satu kemungkinan solusi
+
+Set & Notasi
+-------------------------------------------------------------------------
+g∈G = himpunan generator
+b∈B = himpunan bus
+(i,j)∈L = himpunan jalur transmisi
+t∈T = waktu (jam)
+S base = base power (100)
+
+Variabel Keputusan
+-------------------------------------------------------------------------
+𝑃𝑔,𝑡 = daya dari generator (𝑔 pada waktu 𝑡 (dalam pu))
+𝑃𝑖𝑗,𝑡 = aliran daya dari bus (𝑖 ke bus 𝑗 pada waktu 𝑡)
+𝛿𝑏,𝑡 = sudut tegangan bus (𝑏 pada waktu 𝑡)
+cost 𝑡 = biaya total semua generator pada waktu 
+OF = total biaya semua waktu (fungsi objektif)
+
+Fungsi Objektif
+-------------------------------------------------------------------------
+minOF= t∈T∑cost t
+
+Fungsi Constraint
+-------------------------------------------------------------------------
+Fungsi Biaya Thermal per Waktu:
+costt​ = g∈G∑​( a(g)​⋅ (P(g,t) ​⋅ Sbase​) ^ 2 + b(g)​ ⋅ (P(g,t) ​⋅ Sbase​) + c(g​))
+
+Keseimbangan Daya (Power Balance):
+∑​P(g,t) ​− ​Load(b,t) / Sbase ​​= j∣(b,j)∈L∑​ P(bj,t) ​− j∣(j,b)∈L∑ ​P(jb,t)​
+
+​Persamaan Aliran Daya (DC Power Flow) Untuk setiap ( 𝑖 , 𝑗 ) ∈ 𝐿 , 𝑡 ∈ 𝑇 (i,j)∈L,t∈T:
+Pi(j,t) ​= b(ij) ​⋅(δ(i,t) ​− δ(j,t)), dengan b(ij) ​ = 1 / x(ij)
+
+Batasan Generator Untuk setiap 𝑔 ∈ 𝐺 , 𝑡 ∈ 𝑇 g∈G,t∈T:
+Sbase ​Pgmin ​​≤ P(g,t​) ≤ Sbase ​Pgmax​​
