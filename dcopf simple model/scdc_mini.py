@@ -80,10 +80,15 @@ model.const1 = pyo.Constraint(model.branch, model.t, rule=power_flow_eq)
 # Daya masuk = daya keluar + beban
 # hukum kirchoff
 def power_balance(m, b, t):
+    # t adalah waktu, misalnya jam 1 atau jam 2
+    # total daya generator yang terhubung dengan bus b
     gen = sum(m.Pg[g, t] for g in m.Gen if (b, g) in m.GB)
+    # total beban pada bus b
     load = m.BusData_pd[b, t] / m.Sbase
-    flow_out = sum(m.Pij[b, j, t] for j in m.bus if (b, j) in m.branch)
+    # total aliran daya keluar dari bus b ke bus j pada waktu t
     # flow_out = 0 (karena Bus3 tidak punya jalur keluar ke tempat lain)
+    flow_out = sum(m.Pij[b, j, t] for j in m.bus if (b, j) in m.branch)
+    # total aliran daya masuk ke bus b dari bus j pada waktu t
     flow_in = sum(m.Pij[j, b, t] for j in m.bus if (j, b) in m.branch)
     return gen - load == flow_out - flow_in
 model.const2 = pyo.Constraint(model.bus, model.t, rule=power_balance)
