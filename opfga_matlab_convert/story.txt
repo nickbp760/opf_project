@@ -11,3 +11,24 @@ Ybus = Matriks admitansi jaringan
 Berisi hubungan antara tegangan dan arus tiap bus, berdasarkan impedansi antar saluran.
 Hubungan dasarnya:
 𝐼 = 𝑌𝑏𝑢𝑠 ⋅ 𝑉
+
+lfnewton penjelasan
+lfnewton() menyelesaikan persamaan keseimbangan daya
+untuk setiap bus dalam sistem tenaga listrik.
+
+Ini adalah rumus nonlinear — karena melibatkan perkalian antar bilangan kompleks (Vm, delta)
+Si ​= Vi​⋅Ii*​ = Vi​⋅(j=1∑n​ Y(ij) ​V(j)​)*
+S disini jadi 2 bagian yaitu P daya aktif, Q daya reaktif
+Kita pakai Newton-Raphson untuk menyelesaikan sistem: 𝐽 ⋅ Δ 𝑥 = Δ 𝑆
+Di mana:
+𝐽 = Jacobian → turunan sensitivitas
+Δ 𝑥 = perubahan Vm dan delta (variabel pencarian)
+Δ 𝑆 = mismatch daya ( 𝑃 , 𝑄 )
+| Tahap          | Penjelasan                                                             |
+| -------------- | ---------------------------------------------------------------------- |
+| 1. Hitung S    | Dari Ybus dan V, hitung daya aktual: S = V . (YV)^*                    |
+| 2. Mismatch    | Hitung selisih Delta S = S spesifikasi - S aktual                      |
+| 3. Jacobian    | Bangun sensitivitas terhadap Vm dan delta                              |
+| 4. Newton Step | Selesaikan J . Delta x = Delta S untuk dapatkan koreksi                |
+| 5. Update      | Ubah Vm dan delta pakai hasil Newton-Raphson                           |
+| 6. Ulangi      | Sampai mismatch kecil (konvergen)                                      |

@@ -5,17 +5,14 @@ def lfnewton(busdata, Ybus, base_mva=100, accuracy=1e-6, max_iter=10):
     nbus = busdata.shape[0]
 
     # Inisialisasi
-    Vm = busdata[:, 2].copy()
-    delta = np.radians(busdata[:, 3].copy())
-    Pd = busdata[:, 4]
-    Qd = busdata[:, 5]
-    Pg = busdata[:, 6]
-    Qg = busdata[:, 7]
-    Qmin = busdata[:, 8]
-    Qmax = busdata[:, 9]
-    Qsh = busdata[:, 10]
+    Vm = busdata[:, 2].copy()        # tegangan awal (magnitude)
+    delta = np.radians(busdata[:, 3])  # sudut awal (dalam radian)
+    Pd, Qd = busdata[:, 4], busdata[:, 5]  # beban
+    Pg, Qg = busdata[:, 6], busdata[:, 7]  # pembangkitan awal
+    Qmin, Qmax = busdata[:, 8], busdata[:, 9]
+    Qsh = busdata[:, 10]              # shunt kapasitor
+    kb = busdata[:, 1].astype(int)    # tipe bus: 0=PQ, 1=Slack, 2=PV
 
-    kb = busdata[:, 1].astype(int)
     V = Vm * np.exp(j * delta)
     P = (Pg - Pd) / base_mva
     Q = (Qg - Qd + Qsh) / base_mva
