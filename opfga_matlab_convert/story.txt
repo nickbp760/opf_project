@@ -1,0 +1,13 @@
+| Hal        | DC (sederhana)    | AC Power System (realistis)           |
+| ---------- | ----------------- | ------------------------------------- |
+| Rumus arus | I = V/R           | I = YV                                |
+| Rumus daya | P = VI (jika R)   | S = V I* => P + jQ                    |
+| Tipe nilai | Real              | Kompleks (phasor + magnitudo/sudut)   |
+| Relevansi  | Sistem baterai    | Sistem pembangkitan & transmisi PLN   |
+
+
+lfybus penjelasan
+Ybus = Matriks admitansi jaringan
+Berisi hubungan antara tegangan dan arus tiap bus, berdasarkan impedansi antar saluran.
+Hubungan dasarnya:
+𝐼 = 𝑌𝑏𝑢𝑠 ⋅ 𝑉
