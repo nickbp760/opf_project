@@ -32,3 +32,16 @@ Di mana:
 | 4. Newton Step | Selesaikan J . Delta x = Delta S untuk dapatkan koreksi                |
 | 5. Update      | Ubah Vm dan delta pakai hasil Newton-Raphson                           |
 | 6. Ulangi      | Sampai mismatch kecil (konvergen)                                      |
+
+lineflow penjelasan
+I(ij) ​= Z(ij) (​V(i)​−V(j)) ​​⇒ S(ij) ​= V(i)​⋅I(ij)*
+| Hal                         | Nilai                                   |
+| --------------------------- | --------------------------------------- |
+| `S` dari `lineflow`         | Termasuk rugi saluran (nilai **bruto**) |
+| `S_calc`   dari `lfnewton`  | Sudah dirangkum semua → **nilai netto** |
+| Selisihnya                  | Adalah **losses** dalam saluran         |
+
+busout penjelasan
+Menyajikan hasil akhir simulasi load flow per bus —
+berupa tegangan, daya, dan informasi lainnya — dalam format yang mudah dibaca.
+bisa disusun dari busout data dan lfnewton data.
