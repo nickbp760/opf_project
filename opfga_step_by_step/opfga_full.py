@@ -9,7 +9,7 @@ base_mva = 100  # Base MVA
 
 bus_data = {
     1: {'type': 'Slack', 'Pd': 0,  'Qd': 0, 'V': 1.05, 'Vmin': 0.95, 'Vmax': 1.05},
-    2: {'type': 'PV',    'Pd': 0,  'Qd': 1, 'V': 1.00, 'Vmin': 0.95, 'Vmax': 1.05},
+    2: {'type': 'PV',    'Pd': 1,  'Qd': 2, 'V': 1.00, 'Vmin': 0.95, 'Vmax': 1.05},
     3: {'type': 'PQ',    'Pd': 20, 'Qd': 5, 'V': 1.00, 'Vmin': 0.95, 'Vmax': 1.05},
 }
 
@@ -91,7 +91,6 @@ def objective_rule(m):
         cost_data[g]['a'] * m.Pg[g]**2 +
         cost_data[g]['b'] * m.Pg[g] +
         cost_data[g]['c']
-        + 0.01 * m.Qg[g]**2  # ⬅️ Ini penalti untuk Qg (optional)
         for g in model.GEN
     )
 model.obj = pyo.Objective(rule=objective_rule, sense=pyo.minimize)
@@ -103,30 +102,24 @@ model.obj = pyo.Objective(rule=objective_rule, sense=pyo.minimize)
 solver = pyo.SolverFactory('ipopt')
 results = solver.solve(model, tee=True)
 
-# =============================
-# Output
-# =============================
-
-print("\n=== HASIL AC-OPF ===")
-for i in bus_ids:
-    V = pyo.value(model.V[i])
-    delta_deg = np.degrees(pyo.value(model.delta[i]))
-    print(f"Bus {i}: V = {V:.4f} pu, δ = {delta_deg:.2f}°")
-
 print("\n=== Output Generator ===")
 total_cost = 0
+total_qg = 0
 for g in model.GEN:
     Pg = pyo.value(model.Pg[g]) * base_mva if model.Pg[g].value is not None else 0.0
     Qg = pyo.value(model.Qg[g]) * base_mva if model.Qg[g].value is not None else 0.0
     cost = (
         cost_data[g]['a'] * Pg**2 + cost_data[g]['b'] * Pg + cost_data[g]['c']
-        + 0.01 * Qg**2  # ⬅️ Ini penalti untuk Qg (optional)
     )
     total_cost += cost
+    total_qg += Qg
     print(f"Gen {g}: Pg = {Pg:.2f} MW, Qg = {Qg:.2f} Mvar, Cost = {cost:.2f}")
+print(f"\nTotal Qg supplied (all gens): {total_qg:.2f} Mvar")
 
-print(f"\nTotal Cost (pu basis): {pyo.value(model.obj):.4f}")
-print(f"Total Cost (USD/jam atau sesuai satuan): {total_cost:.2f}")
+# Hitung total Qd sistem
+total_qd = sum(bus_data[i]['Qd'] for i in bus_ids)
+print(f"Total Qd demand: {total_qd:.2f} Mvar")
 
-total_Qg = sum(pyo.value(model.Qg[g]) for g in model.GEN) * base_mva
-print(f"\nTotal Qg supplied: {total_Qg:.2f} Mvar (dibutuhkan: {bus_data[3]['Qd']:.2f} Mvar)")
+# Hitung mismatch
+mismatch_q = total_qd - total_qg
+print(f"Selisih Q (harus disuplai oleh jaringan / Slack): {mismatch_q:.2f} Mvar")
