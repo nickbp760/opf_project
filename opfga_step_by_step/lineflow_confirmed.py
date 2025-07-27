@@ -53,3 +53,33 @@ def lineflow(linedata, V, base_mva=100):
     SLT = SLT / 2
 
     return results, SLT
+
+
+if __name__ == "__main__":
+    # V hasil dari lfnewton
+    Vm = [1.0600, 1.0000, 0.9994]
+    delta_deg = [0.0000, 1.8130, -0.7901]
+    delta = np.radians(delta_deg)
+    V = Vm * np.exp(1j * delta)
+
+    # Line data
+    linedata = np.array([
+        [1, 2, 0.02, 0.04, 0.00, 1.0],
+        [1, 3, 0.01, 0.03, 0.00, 1.0],
+        [2, 3, 0.0125, 0.025, 0.00, 1.0],
+    ])
+
+    results, SLT = lineflow(linedata, V)
+
+    # Print
+    print("\nHASIL LINE FLOW:")
+    print("----------------")
+    for res in results:
+        f, t = res['from'], res['to']
+        Snk, Skn, SL = res['Snk'], res['Skn'], res['SL']
+        print(f"Line {f} → {t}:")
+        print(f"  S{f}{t} = {Snk.real:.4f} + j{Snk.imag:.4f} MVA")
+        print(f"  S{t}{f} = {Skn.real:.4f} + j{Skn.imag:.4f} MVA")
+        print(f"  Loss    = {SL.real:.4f} + j{SL.imag:.4f} MVA\n")
+
+        print(f"Total system losses: {SLT.real:.4f} + j{SLT.imag:.4f} MVA")

@@ -1,9 +1,9 @@
 import numpy as np
 import pyomo.environ as pyo
-from lfybus import build_ybus
-from lfnewton import lfnewton
-from lineflow import lineflow
-from busout import busout
+from lfybus_confirmed import build_ybus
+from lfnewton_confirmed import lfnewton
+from lineflow_confirmed import lineflow
+from busout_confirmed import busout
 
 # -----------------------------
 # 1. DATA SISTEM MINI
@@ -80,10 +80,10 @@ for it in range(max_iter):
     temp_busdata[1, 6] = Pg2
 
     Ybus = build_ybus(linedata, busdata.shape[0])
-    Vm, delta_deg, Pg_out, Qg, S, P_calc, Q_calc = lfnewton(temp_busdata, Ybus, base_mva)
+    Vm, delta_degree, Pg_new, Qg_new, Sbus = lfnewton(temp_busdata, Ybus, base_mva)
 
-    if np.any(np.isnan(Vm)) or np.any(Vm < 0.01):
-        print(f"❌ Iterasi {it+1}: Load flow gagal. Vm tidak valid.")
+    if np.any(np.isnan(Vm)) or np.any(Vm < 0.95) or np.any(Vm > 1.05):
+        print(f"❌ Iterasi {it+1}: Load flow gagal. Tegangan tidak dalam batas [0.95, 1.05] p.u.")
         lf_fail_count += 1
         if lf_fail_count >= max_lf_fail:
             print("⛔ Load flow gagal terus. Iterasi dihentikan.")
@@ -93,7 +93,7 @@ for it in range(max_iter):
         lf_fail_count = 0  # reset jika sukses
         # update nilai hasil OPF yang valid
         busdata[:, 6] = temp_busdata[:, 6]
-        V = Vm * np.exp(1j * np.radians(delta_deg))
+        V = Vm * np.exp(1j * np.radians(delta_degree))
         results, SLT = lineflow(linedata, V, base_mva)
         new_load = total_demand + SLT.real
 
@@ -108,7 +108,7 @@ for it in range(max_iter):
 # -----------------------------
 # 3. OUTPUT AKHIR
 # -----------------------------
-busout(busdata, Vm, delta_deg, Pg_out, Qg, P_calc, Q_calc)
+busout(busdata, Vm, delta_degree, Pg_new, Qg_new)
 
 print("\nOptimal Generator Output (MW):")
 for g in model.G:
