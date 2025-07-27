@@ -1,5 +1,6 @@
 import pyomo.environ as pyo
 import numpy as np
+import sys
 
 # =============================
 # Data Sistem
@@ -19,8 +20,8 @@ gen_bus_map = {
 }
 
 cost_data = {
-    1: {'a': 0.01, 'b': 1.0, 'c': 5.0, 'Pmin': 0,      'Pmax': 100, 'Qmin': -50, 'Qmax': 50},
-    2: {'a': 0.01, 'b': 1.00005, 'c': 10.0, 'Pmin': 0.005, 'Pmax': 100, 'Qmin': -50, 'Qmax': 50},
+    1: {'a': 0.01, 'b': 1.0, 'c': 5.0, 'Pmin': 0,      'Pmax': 20, 'Qmin': -50, 'Qmax': 50},
+    2: {'a': 0.01, 'b': 1.00005, 'c': 10.0, 'Pmin': 0.005, 'Pmax': 30, 'Qmin': -50, 'Qmax': 50},
 }
 
 Ybus = np.array([
@@ -45,8 +46,29 @@ model.V = pyo.Var(model.BUS, initialize={i: bus_data[i]['V'] for i in bus_ids},
 
 model.delta = pyo.Var(model.BUS, initialize=0.0)
 
-model.Pg = pyo.Var(model.GEN, initialize=10, bounds=lambda m, g: (cost_data[g]['Pmin'], cost_data[g]['Pmax']))
-model.Qg = pyo.Var(model.GEN, initialize=0, bounds=lambda m, g: (cost_data[g]['Qmin'], cost_data[g]['Qmax']))
+model.Pg = pyo.Var(model.GEN,
+    initialize={g: (cost_data[g]['Pmin'] + cost_data[g]['Pmax']) / 2 for g in cost_data},
+    bounds=lambda m, g: (cost_data[g]['Pmin'], cost_data[g]['Pmax'])
+)
+
+model.Qg = pyo.Var(model.GEN,
+    initialize={g: (cost_data[g]['Qmin'] + cost_data[g]['Qmax']) / 2 for g in cost_data},
+    bounds=lambda m, g: (cost_data[g]['Qmin'], cost_data[g]['Qmax'])
+)
+
+# Hitung total batas maksimum Q dan P generator
+Qmax_total = sum(cost_data[g]['Qmax'] for g in cost_data)
+Pmax_total = sum(cost_data[g]['Pmax'] for g in cost_data)
+
+# Constraint: total Qg tidak melebihi Qmax_total
+def limit_qg_total(m):
+    return sum(m.Qg[g] for g in m.GEN) <= Qmax_total / base_mva
+model.qg_total_limit = pyo.Constraint(rule=limit_qg_total)
+
+# Constraint: total Pg tidak melebihi Pmax_total
+def limit_pg_total(m):
+    return sum(m.Pg[g] for g in m.GEN) <= Pmax_total / base_mva
+model.pg_total_limit = pyo.Constraint(rule=limit_pg_total)
 
 # Constraint delta slack bus
 def ref_bus_rule(m):
@@ -70,7 +92,7 @@ model.P_balance = pyo.Constraint(model.BUS, rule=power_balance_P)
 
 # Power Balance Q
 def power_balance_Q(m, i):
-    if bus_data[i]['type'] in ['PQ', 'PV']:  # ✅ tambahkan PV
+    if bus_data[i]['type'] in ['PQ', 'PV', 'Slack']:  # ✅ tambahkan PV
         Vi = m.V[i]
         deltai = m.delta[i]
         Qg = sum(m.Qg[g] for g in model.GEN if gen_bus_map[g] == i)
@@ -101,6 +123,11 @@ model.obj = pyo.Objective(rule=objective_rule, sense=pyo.minimize)
 
 solver = pyo.SolverFactory('ipopt')
 results = solver.solve(model, tee=True)
+
+# Cek apakah solver infeasible
+if (results.solver.termination_condition == pyo.TerminationCondition.infeasible):
+    print("⚠️  Solusi infeasible: tidak ada solusi yang memenuhi constraint.")
+    sys.exit(1)
 
 print("\n=== Output Generator ===")
 total_cost = 0
