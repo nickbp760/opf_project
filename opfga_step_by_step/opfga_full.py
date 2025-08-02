@@ -5,6 +5,8 @@ from lfybus_confirmed import build_ybus
 from pyomo.environ import value
 from lineflow_confirmed import lineflow
 from busout_confirmed import busout
+import pandas as pd
+import numpy as np
 import sys  # noqa
 
 # =============================
@@ -12,29 +14,52 @@ import sys  # noqa
 # =============================
 print("0. Data System Initialized")
 base_mva = 100  # Base MVA
+# Baca Excel
+filename = 'opfga_step_by_step\system_data.xlsx'
+bus_df = pd.read_excel(filename, sheet_name='bus_data')
+gen_map_df = pd.read_excel(filename, sheet_name='gen_bus_map')
+cost_df = pd.read_excel(filename, sheet_name='cost_data')
+line_df = pd.read_excel(filename, sheet_name='linedata')
 
-bus_data = {
-    1: {'type': 'Slack', 'Pd': 0,  'Qd': 0, 'V': 1.05, 'Vmin': 0.95, 'Vmax': 1.05},
-    2: {'type': 'PV',    'Pd': 1,  'Qd': 2, 'V': 1.00, 'Vmin': 0.95, 'Vmax': 1.05},
-    3: {'type': 'PQ',    'Pd': 20, 'Qd': 5, 'V': 1.00, 'Vmin': 0.95, 'Vmax': 1.05},
-}
+# Konversi ke dict: bus_data
+bus_data = {}
+for _, row in bus_df.iterrows():
+    bus = int(row['bus'])
+    bus_data[bus] = {
+        'type': row['type'],
+        'Pd': row['Pd'],
+        'Qd': row['Qd'],
+        'V': row['V'],
+        'Vmin': row['Vmin'],
+        'Vmax': row['Vmax'],
+    }
 
-gen_bus_map = {
-    1: 1,
-    2: 2,
-}
+# Konversi ke dict: gen_bus_map
+gen_bus_map = dict(zip(gen_map_df['gen_id'], gen_map_df['bus_id']))
 
-cost_data = {
-    1: {'a': 0.01, 'b': 1.0, 'c': 5.0, 'Pmin': 0, 'Pmax': 8, 'Qmin': -50, 'Qmax': 50},
-    2: {'a': 0.01, 'b': 1.00005, 'c': 10.0, 'Pmin': 0.005, 'Pmax': 30, 'Qmin': -50, 'Qmax': 50},
-}
+# Konversi ke dict: cost_data
+cost_data = {}
+for _, row in cost_df.iterrows():
+    gen_id = int(row['gen_id'])
+    cost_data[gen_id] = {
+        'a': row['a'],
+        'b': row['b'],
+        'c': row['c'],
+        'Pmin': row['Pmin'],
+        'Pmax': row['Pmax'],
+        'Qmin': row['Qmin'],
+        'Qmax': row['Qmax'],
+    }
 
-# From, To, R, X, B/2, Tap, Smax
-linedata = np.array([
-    [1, 2, 0.02, 0.06, 0.03, 1, 15],
-    [1, 3, 0.08, 0.24, 0.025, 1, 15],
-    [2, 3, 0.06, 0.18, 0.02, 1, 15]
-])
+# Konversi ke np.array: linedata
+linedata = line_df[['From', 'To', 'R', 'X', 'B_half', 'Tap', 'Smax']].to_numpy()
+
+# Cek hasil
+print("bus_data =", bus_data)
+print("gen_bus_map =", gen_bus_map)
+print("cost_data =", cost_data)
+print("linedata =\n", linedata)
+
 nbus = len(bus_data)
 Ybus = build_ybus(linedata, nbus)
 
