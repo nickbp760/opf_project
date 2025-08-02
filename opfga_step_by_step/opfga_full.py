@@ -3,6 +3,7 @@ from pyomo.opt import SolverStatus, TerminationCondition
 import numpy as np
 from lfybus_confirmed import build_ybus
 from pyomo.environ import value
+from lineflow_confirmed import lineflow
 from busout_confirmed import busout
 import sys  # noqa
 
@@ -157,6 +158,7 @@ total_qd = sum(bus_data[i]['Qd'] for i in bus_ids)
 print(f"Total Qd demand: {total_qd:.2f} Mvar")
 print(f"Selisih Q (harus disuplai oleh jaringan / Slack): {total_qd - total_qg:.2f} Mvar")
 
+print("9. Hasil Bus Out")
 Vm = np.array([value(model.V[i]) for i in model.BUS])
 delta_rad = np.array([value(model.delta[i]) for i in model.BUS])
 delta_deg = np.degrees(delta_rad)
@@ -185,3 +187,18 @@ busdata_np = np.array([
 ])
 
 busout(busdata_np, Vm, delta_deg, Pg_arr, Qg_arr)
+
+print("\n9. Hasil Line Flow")
+V_complex = Vm * np.exp(1j * delta_rad)
+line_results, SLT = lineflow(linedata, V_complex, base_mva)
+
+print("\n=== Hasil Line Flow ===")
+for res in line_results:
+    f, t = res['from'], res['to']
+    Snk, Skn, SL = res['Snk'], res['Skn'], res['SL']
+    print(f"Line {f} → {t}:")
+    print(f"  S{f}{t} = {Snk.real:.4f} + j{Snk.imag:.4f} MVA")
+    print(f"  S{t}{f} = {Skn.real:.4f} + j{Skn.imag:.4f} MVA")
+    print(f"  Loss    = {SL.real:.4f} + j{SL.imag:.4f} MVA\n")
+
+print(f"Total system losses: {SLT.real:.4f} + j{SLT.imag:.4f} MVA")
