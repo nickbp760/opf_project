@@ -1,6 +1,9 @@
 import pyomo.environ as pyo
 from pyomo.opt import SolverStatus, TerminationCondition
 import numpy as np
+from lfybus_confirmed import build_ybus
+from pyomo.environ import value
+from busout_confirmed import busout
 import sys  # noqa
 
 # =============================
@@ -25,11 +28,14 @@ cost_data = {
     2: {'a': 0.01, 'b': 1.00005, 'c': 10.0, 'Pmin': 0.005, 'Pmax': 30, 'Qmin': -50, 'Qmax': 50},
 }
 
-Ybus = np.array([
-    [10-20j, -5+10j, -5+10j],
-    [-5+10j, 10-20j, -5+10j],
-    [-5+10j, -5+10j, 10-20j],
+# From, To, R, X, B/2, Tap
+linedata = np.array([
+    [1, 2, 0.02, 0.06, 0.03, 1],
+    [1, 3, 0.08, 0.24, 0.025, 1],
+    [2, 3, 0.06, 0.18, 0.02, 1]
 ])
+nbus = len(bus_data)
+Ybus = build_ybus(linedata, nbus)
 
 bus_ids = list(bus_data.keys())
 
@@ -150,3 +156,32 @@ print(f"\nTotal Qg supplied (all gens): {total_qg:.2f} Mvar")
 total_qd = sum(bus_data[i]['Qd'] for i in bus_ids)
 print(f"Total Qd demand: {total_qd:.2f} Mvar")
 print(f"Selisih Q (harus disuplai oleh jaringan / Slack): {total_qd - total_qg:.2f} Mvar")
+
+Vm = np.array([value(model.V[i]) for i in model.BUS])
+delta_rad = np.array([value(model.delta[i]) for i in model.BUS])
+delta_deg = np.degrees(delta_rad)
+
+Pg_arr = np.zeros(nbus)
+Qg_arr = np.zeros(nbus)
+for g in model.GEN:
+    b = model.gen_bus[g]
+    Pg_arr[b - 1] += value(model.Pg[g]) * base_mva
+    Qg_arr[b - 1] += value(model.Qg[g]) * base_mva
+
+busdata_np = np.array([
+    [
+        i,
+        1 if bus_data[i]['type'] == 'Slack' else 2 if bus_data[i]['type'] == 'PV' else 0,
+        bus_data[i]['V'],             # Vinit
+        0,                            # θinit
+        bus_data[i]['Pd'],
+        bus_data[i]['Qd'],
+        0, 0,                        # Pg, Qg (diisi Pg_arr, Qg_arr)
+        bus_data[i]['Vmin'],         # Vmin
+        bus_data[i]['Vmax'],         # Vmax
+        0                            # Qsh (diabaikan)
+    ]
+    for i in bus_data
+])
+
+busout(busdata_np, Vm, delta_deg, Pg_arr, Qg_arr)
