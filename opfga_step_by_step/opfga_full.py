@@ -29,11 +29,11 @@ cost_data = {
     2: {'a': 0.01, 'b': 1.00005, 'c': 10.0, 'Pmin': 0.005, 'Pmax': 30, 'Qmin': -50, 'Qmax': 50},
 }
 
-# From, To, R, X, B/2, Tap
+# From, To, R, X, B/2, Tap, Smax
 linedata = np.array([
-    [1, 2, 0.02, 0.06, 0.03, 1],
-    [1, 3, 0.08, 0.24, 0.025, 1],
-    [2, 3, 0.06, 0.18, 0.02, 1]
+    [1, 2, 0.02, 0.06, 0.03, 1, 15],
+    [1, 3, 0.08, 0.24, 0.025, 1, 15],
+    [2, 3, 0.06, 0.18, 0.02, 1, 15]
 ])
 nbus = len(bus_data)
 Ybus = build_ybus(linedata, nbus)
@@ -65,6 +65,9 @@ model.Qmax = pyo.Param(model.GEN, initialize={g: cost_data[g]['Qmax'] / base_mva
 model.a = pyo.Param(model.GEN, initialize={g: cost_data[g]['a'] for g in cost_data})
 model.b = pyo.Param(model.GEN, initialize={g: cost_data[g]['b'] for g in cost_data})
 model.c = pyo.Param(model.GEN, initialize={g: cost_data[g]['c'] for g in cost_data})
+model.Smax = pyo.Param(range(1, len(linedata) + 1), initialize={
+    i+1: linedata[i, 6] / base_mva for i in range(len(linedata))
+})
 model.gen_bus = pyo.Param(model.GEN, initialize=gen_bus_map)
 
 # Variabel
@@ -72,11 +75,12 @@ print("4. Definisikan Variable")
 model.V = pyo.Var(model.BUS, initialize={i: bus_data[i]['V'] for i in bus_ids},
                   bounds=lambda m, i: (m.Vmin[i], m.Vmax[i]))
 model.delta = pyo.Var(model.BUS, initialize=0.0)
-model.Pg = pyo.Var(model.GEN, initialize={
-    g: (cost_data[g]['Pmin'] + cost_data[g]['Pmax']) / (2) * base_mva for g in cost_data},
+model.Pg = pyo.Var(model.GEN, 
+    initialize={g: (cost_data[g]['Pmin'] + cost_data[g]['Pmax']) / (2 * base_mva) for g in cost_data},
     bounds=lambda m, g: (m.Pmin[g], m.Pmax[g]))
-model.Qg = pyo.Var(model.GEN, initialize={
-    g: (cost_data[g]['Qmin'] + cost_data[g]['Qmax']) / (2) * base_mva for g in cost_data},
+
+model.Qg = pyo.Var(model.GEN, 
+    initialize={g: (cost_data[g]['Qmin'] + cost_data[g]['Qmax']) / (2 * base_mva) for g in cost_data},
     bounds=lambda m, g: (m.Qmin[g], m.Qmax[g]))
 
 print("5. Definisikan Constraint")
@@ -116,6 +120,27 @@ def power_balance_Q(m, i):
         return pyo.Constraint.Skip
 model.Q_balance = pyo.Constraint(model.BUS, rule=power_balance_Q)
 
+model.Sij_limit = pyo.ConstraintList()
+use_smax_constraint = True
+if use_smax_constraint:
+    for k in range(len(linedata)):
+        i = int(linedata[k, 0])
+        j = int(linedata[k, 1])
+        G = Ybus[i-1, j-1].real
+        B = Ybus[i-1, j-1].imag
+        Smax_sq = model.Smax[k+1] ** 2
+
+        Vi = model.V[i]
+        Vj = model.V[j]
+        di = model.delta[i]
+        dj = model.delta[j]
+
+        # Pij dan Qij berdasarkan rumus AC power flow
+        Pij = Vi**2 * G - Vi * Vj * (G * pyo.cos(di - dj) + B * pyo.sin(di - dj))
+        Qij = -Vi**2 * B - Vi * Vj * (G * pyo.sin(di - dj) - B * pyo.cos(di - dj))
+
+        model.Sij_limit.add(Pij**2 + Qij**2 <= Smax_sq)
+
 # Fungsi Objektif
 print("6. Definisikan Objective Function")
 def objective_rule(m):
@@ -137,8 +162,10 @@ if (results.solver.status == SolverStatus.ok) and (results.solver.termination_co
     print("✅ Solusi optimal ditemukan!")
 elif results.solver.termination_condition == TerminationCondition.infeasible:
     print("❌ Tidak ada solusi yang memenuhi constraint (infeasible).")
+    sys.exit(0)
 else:
     print(f"⚠️ Solver selesai dengan status: {results.solver.status}, kondisi: {results.solver.termination_condition}")
+    sys.exit(0)
 
 
 print("8. Hasil Optimasi")
@@ -202,3 +229,8 @@ for res in line_results:
     print(f"  Loss    = {SL.real:.4f} + j{SL.imag:.4f} MVA\n")
 
 print(f"Total system losses: {SLT.real:.4f} + j{SLT.imag:.4f} MVA")
+
+print("\n🔎 Cek Magnitude Line Flow:")
+for res in line_results:
+    Sij_mag = abs(res['Snk'])
+    print(f"Line {res['from']} → {res['to']}: |Sij| = {Sij_mag:.4f} MVA")
