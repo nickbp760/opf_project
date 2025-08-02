@@ -1,11 +1,12 @@
 import pyomo.environ as pyo
+from pyomo.opt import SolverStatus, TerminationCondition
 import numpy as np
-import sys
+import sys  # noqa
 
 # =============================
 # Data Sistem
 # =============================
-
+print("0. Data System Initialized")
 base_mva = 100  # Base MVA
 
 bus_data = {
@@ -20,7 +21,7 @@ gen_bus_map = {
 }
 
 cost_data = {
-    1: {'a': 0.01, 'b': 1.0, 'c': 5.0, 'Pmin': 0,      'Pmax': 20, 'Qmin': -50, 'Qmax': 50},
+    1: {'a': 0.01, 'b': 1.0, 'c': 5.0, 'Pmin': 0, 'Pmax': 8, 'Qmin': -50, 'Qmax': 50},
     2: {'a': 0.01, 'b': 1.00005, 'c': 10.0, 'Pmin': 0.005, 'Pmax': 30, 'Qmin': -50, 'Qmax': 50},
 }
 
@@ -35,52 +36,53 @@ bus_ids = list(bus_data.keys())
 # =============================
 # Model Pyomo
 # =============================
-
+print("1. Buat model Pyomo")
 model = pyo.ConcreteModel()
+
+print("2. Definisikan Set")
 model.BUS = pyo.Set(initialize=bus_ids)
 model.GEN = pyo.Set(initialize=cost_data.keys())
 
+# Parameter
+print("3. Definisikan Parameter")
+model.Vmin = pyo.Param(model.BUS, initialize={i: bus_data[i]['Vmin'] for i in bus_ids})
+model.Vmax = pyo.Param(model.BUS, initialize={i: bus_data[i]['Vmax'] for i in bus_ids})
+model.Pd = pyo.Param(model.BUS, initialize={i: bus_data[i]['Pd'] / base_mva for i in bus_ids})
+model.Qd = pyo.Param(model.BUS, initialize={i: bus_data[i]['Qd'] / base_mva for i in bus_ids})
+model.bus_type = pyo.Param(model.BUS, initialize={i: bus_data[i]['type'] for i in bus_ids})
+
+model.Pmin = pyo.Param(model.GEN, initialize={g: cost_data[g]['Pmin'] / base_mva for g in cost_data})
+model.Pmax = pyo.Param(model.GEN, initialize={g: cost_data[g]['Pmax'] / base_mva for g in cost_data})
+model.Qmin = pyo.Param(model.GEN, initialize={g: cost_data[g]['Qmin'] / base_mva for g in cost_data})
+model.Qmax = pyo.Param(model.GEN, initialize={g: cost_data[g]['Qmax'] / base_mva for g in cost_data})
+model.a = pyo.Param(model.GEN, initialize={g: cost_data[g]['a'] for g in cost_data})
+model.b = pyo.Param(model.GEN, initialize={g: cost_data[g]['b'] for g in cost_data})
+model.c = pyo.Param(model.GEN, initialize={g: cost_data[g]['c'] for g in cost_data})
+model.gen_bus = pyo.Param(model.GEN, initialize=gen_bus_map)
+
 # Variabel
+print("4. Definisikan Variable")
 model.V = pyo.Var(model.BUS, initialize={i: bus_data[i]['V'] for i in bus_ids},
-                  bounds=lambda m, i: (bus_data[i]['Vmin'], bus_data[i]['Vmax']))
-
+                  bounds=lambda m, i: (m.Vmin[i], m.Vmax[i]))
 model.delta = pyo.Var(model.BUS, initialize=0.0)
+model.Pg = pyo.Var(model.GEN, initialize={
+    g: (cost_data[g]['Pmin'] + cost_data[g]['Pmax']) / (2) * base_mva for g in cost_data},
+    bounds=lambda m, g: (m.Pmin[g], m.Pmax[g]))
+model.Qg = pyo.Var(model.GEN, initialize={
+    g: (cost_data[g]['Qmin'] + cost_data[g]['Qmax']) / (2) * base_mva for g in cost_data},
+    bounds=lambda m, g: (m.Qmin[g], m.Qmax[g]))
 
-model.Pg = pyo.Var(model.GEN,
-    initialize={g: (cost_data[g]['Pmin'] + cost_data[g]['Pmax']) / 2 for g in cost_data},
-    bounds=lambda m, g: (cost_data[g]['Pmin'], cost_data[g]['Pmax'])
-)
-
-model.Qg = pyo.Var(model.GEN,
-    initialize={g: (cost_data[g]['Qmin'] + cost_data[g]['Qmax']) / 2 for g in cost_data},
-    bounds=lambda m, g: (cost_data[g]['Qmin'], cost_data[g]['Qmax'])
-)
-
-# Hitung total batas maksimum Q dan P generator
-Qmax_total = sum(cost_data[g]['Qmax'] for g in cost_data)
-Pmax_total = sum(cost_data[g]['Pmax'] for g in cost_data)
-
-# Constraint: total Qg tidak melebihi Qmax_total
-def limit_qg_total(m):
-    return sum(m.Qg[g] for g in m.GEN) <= Qmax_total / base_mva
-model.qg_total_limit = pyo.Constraint(rule=limit_qg_total)
-
-# Constraint: total Pg tidak melebihi Pmax_total
-def limit_pg_total(m):
-    return sum(m.Pg[g] for g in m.GEN) <= Pmax_total / base_mva
-model.pg_total_limit = pyo.Constraint(rule=limit_pg_total)
-
-# Constraint delta slack bus
+print("5. Definisikan Constraint")
 def ref_bus_rule(m):
     return m.delta[1] == 0
 model.ref_bus = pyo.Constraint(rule=ref_bus_rule)
 
-# Power Balance P
+# Power balance P
 def power_balance_P(m, i):
     Vi = m.V[i]
     deltai = m.delta[i]
-    Pi_gen = sum(m.Pg[g] for g in model.GEN if gen_bus_map[g] == i)
-    Pi_load = bus_data[i]['Pd'] / base_mva
+    Pi_gen = sum(m.Pg[g] for g in m.GEN if m.gen_bus[g] == i)
+    Pi_load = m.Pd[i]
 
     return Pi_gen - Pi_load == sum(
         Vi * m.V[j] * (
@@ -90,13 +92,13 @@ def power_balance_P(m, i):
     )
 model.P_balance = pyo.Constraint(model.BUS, rule=power_balance_P)
 
-# Power Balance Q
+# Power balance Q
 def power_balance_Q(m, i):
-    if bus_data[i]['type'] in ['PQ', 'PV', 'Slack']:  # ✅ tambahkan PV
+    if m.bus_type[i] in ['PQ', 'PV', 'Slack']:
         Vi = m.V[i]
         deltai = m.delta[i]
-        Qg = sum(m.Qg[g] for g in model.GEN if gen_bus_map[g] == i)
-        Qd = bus_data[i]['Qd'] / base_mva
+        Qg = sum(m.Qg[g] for g in m.GEN if m.gen_bus[g] == i)
+        Qd = m.Qd[i]
         return Qg - Qd == sum(
             Vi * m.V[j] * (
                 Ybus[i-1, j-1].real * pyo.sin(deltai - m.delta[j]) -
@@ -108,45 +110,43 @@ def power_balance_Q(m, i):
 model.Q_balance = pyo.Constraint(model.BUS, rule=power_balance_Q)
 
 # Fungsi Objektif
+print("6. Definisikan Objective Function")
 def objective_rule(m):
     return sum(
-        cost_data[g]['a'] * m.Pg[g]**2 +
-        cost_data[g]['b'] * m.Pg[g] +
-        cost_data[g]['c']
-        for g in model.GEN
+        m.a[g] * m.Pg[g]**2 + m.b[g] * m.Pg[g] + m.c[g]
+        for g in m.GEN
     )
 model.obj = pyo.Objective(rule=objective_rule, sense=pyo.minimize)
 
 # =============================
 # Solver
 # =============================
-
+print("7. Jalankan Optimasi")
 solver = pyo.SolverFactory('ipopt')
 results = solver.solve(model, tee=True)
 
-# Cek apakah solver infeasible
-if (results.solver.termination_condition == pyo.TerminationCondition.infeasible):
-    print("⚠️  Solusi infeasible: tidak ada solusi yang memenuhi constraint.")
-    sys.exit(1)
+print("\n=== Hasil Solusi ===")
+if (results.solver.status == SolverStatus.ok) and (results.solver.termination_condition == TerminationCondition.optimal):
+    print("✅ Solusi optimal ditemukan!")
+elif results.solver.termination_condition == TerminationCondition.infeasible:
+    print("❌ Tidak ada solusi yang memenuhi constraint (infeasible).")
+else:
+    print(f"⚠️ Solver selesai dengan status: {results.solver.status}, kondisi: {results.solver.termination_condition}")
 
+
+print("8. Hasil Optimasi")
 print("\n=== Output Generator ===")
 total_cost = 0
 total_qg = 0
 for g in model.GEN:
-    Pg = pyo.value(model.Pg[g]) * base_mva if model.Pg[g].value is not None else 0.0
-    Qg = pyo.value(model.Qg[g]) * base_mva if model.Qg[g].value is not None else 0.0
-    cost = (
-        cost_data[g]['a'] * Pg**2 + cost_data[g]['b'] * Pg + cost_data[g]['c']
-    )
+    Pg = pyo.value(model.Pg[g]) * base_mva
+    Qg = pyo.value(model.Qg[g]) * base_mva
+    cost = cost_data[g]['a'] * Pg**2 + cost_data[g]['b'] * Pg + cost_data[g]['c']
     total_cost += cost
     total_qg += Qg
     print(f"Gen {g}: Pg = {Pg:.2f} MW, Qg = {Qg:.2f} Mvar, Cost = {cost:.2f}")
-print(f"\nTotal Qg supplied (all gens): {total_qg:.2f} Mvar")
 
-# Hitung total Qd sistem
+print(f"\nTotal Qg supplied (all gens): {total_qg:.2f} Mvar")
 total_qd = sum(bus_data[i]['Qd'] for i in bus_ids)
 print(f"Total Qd demand: {total_qd:.2f} Mvar")
-
-# Hitung mismatch
-mismatch_q = total_qd - total_qg
-print(f"Selisih Q (harus disuplai oleh jaringan / Slack): {mismatch_q:.2f} Mvar")
+print(f"Selisih Q (harus disuplai oleh jaringan / Slack): {total_qd - total_qg:.2f} Mvar")
