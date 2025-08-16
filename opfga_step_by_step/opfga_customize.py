@@ -15,7 +15,7 @@ import sys  # noqa
 print("0. Data System Initialized")
 base_mva = 100  # Base MVA
 # Baca Excel
-filename = 'opfga_step_by_step\system_data.xlsx'
+filename = 'opfga_step_by_step\system_data_costumize.xlsx'
 bus_df = pd.read_excel(filename, sheet_name='bus_data')
 gen_map_df = pd.read_excel(filename, sheet_name='gen_bus_map')
 cost_df = pd.read_excel(filename, sheet_name='cost_data')
@@ -35,7 +35,10 @@ for _, row in bus_df.iterrows():
     }
 
 # Konversi ke dict: gen_bus_map
+# Mapping generator ke bus
 gen_bus_map = dict(zip(gen_map_df['gen_id'], gen_map_df['bus_id']))
+# List generator yang H2
+h2_gens = gen_map_df.loc[gen_map_df['is_H2'] == 1, 'gen_id'].tolist()
 
 # Konversi ke dict: cost_data
 cost_data = {}
@@ -49,6 +52,15 @@ for _, row in cost_df.iterrows():
         'Pmax': row['Pmax'],
         'Qmin': row['Qmin'],
         'Qmax': row['Qmax'],
+        # Konsumsi H2 per MWh listrik
+        # Lower Heating Value (LHV) H₂ = ± 33.33 kWh/kg
+        # Contoh: jika efisiensi 50% → kg/MWh ≈ 1000/ (33.33 x 0.5) ≈ 60.0060006001 (isi sesuai datamu)
+        'kH2': row.get('kH2', 0.0),
+        # Kalau generator itu dispatch 10 MW selama 1 jam → 10 MWh output.
+        # Konsumsi H₂ = 10 × 60 = 600 kg.
+        # Biaya H₂ = 600 × 3 = 1800 $/h.
+        # Harga H₂ konservatif 3 $/kg
+        'priceH2': row.get('priceH2', 0.0),
     }
 
 # Konversi ke np.array: linedata
@@ -74,6 +86,7 @@ model = pyo.ConcreteModel()
 print("2. Definisikan Set")
 model.BUS = pyo.Set(initialize=bus_ids)
 model.GEN = pyo.Set(initialize=cost_data.keys())
+model.H2GEN = pyo.Set(initialize=h2_gens)
 
 # Parameter
 print("3. Definisikan Parameter")
@@ -94,6 +107,8 @@ model.Smax = pyo.Param(range(1, len(linedata) + 1), initialize={
     i+1: linedata[i, 6] / base_mva for i in range(len(linedata))
 })
 model.gen_bus = pyo.Param(model.GEN, initialize=gen_bus_map)
+model.kH2 = pyo.Param(model.GEN, initialize={g: cost_data[g]['kH2'] for g in cost_data})
+model.priceH2 = pyo.Param(model.GEN, initialize={g: cost_data[g]['priceH2'] for g in cost_data})
 
 # Variabel
 print("4. Definisikan Variable")
@@ -169,10 +184,22 @@ if use_smax_constraint:
 # Fungsi Objektif
 print("6. Definisikan Objective Function")
 def objective_rule(m):
-    return sum(
-        m.a[g] * m.Pg[g]**2 + m.b[g] * m.Pg[g] + m.c[g]
+    # Gen cost: a*(Pg_MW)^2 + b*(Pg_MW) + c
+    gen_cost = sum(
+        m.a[g] * (m.Pg[g] * base_mva)**2 +
+        m.b[g] * (m.Pg[g] * base_mva) +
+        m.c[g]
         for g in m.GEN
     )
+
+    # Biaya H2 untuk H2GEN: priceH2 ($/kg) * kH2 (kg/MWh) * Pg_MW
+    h2_fuel_cost = sum(
+        m.priceH2[g] * m.kH2[g] * (m.Pg[g] * base_mva)
+        for g in m.H2GEN
+    )
+
+    return gen_cost + h2_fuel_cost
+
 model.obj = pyo.Objective(rule=objective_rule, sense=pyo.minimize)
 
 # =============================
@@ -195,20 +222,33 @@ else:
 
 print("8. Hasil Optimasi")
 print("\n=== Output Generator ===")
-total_cost = 0
-total_qg = 0
+total_cost = 0.0
+total_h2_cost = 0.0
+total_gen_cost = 0.0
 for g in model.GEN:
-    Pg = pyo.value(model.Pg[g]) * base_mva
+    Pg_MW = pyo.value(model.Pg[g]) * base_mva
     Qg = pyo.value(model.Qg[g]) * base_mva
-    cost = cost_data[g]['a'] * Pg**2 + cost_data[g]['b'] * Pg + cost_data[g]['c']
-    total_cost += cost
-    total_qg += Qg
-    print(f"Gen {g}: Pg = {Pg:.2f} MW, Qg = {Qg:.2f} Mvar, Cost = {cost:.2f}")
 
-print(f"\nTotal Qg supplied (all gens): {total_qg:.2f} Mvar")
-total_qd = sum(bus_data[i]['Qd'] for i in bus_ids)
-print(f"Total Qd demand: {total_qd:.2f} Mvar")
-print(f"Selisih Q (harus disuplai oleh jaringan / Slack): {total_qd - total_qg:.2f} Mvar")
+    # Biaya produksi (MW basis) — konsisten dengan objektif yang baru
+    cost_gen = cost_data[g]['a'] * (Pg_MW**2) + cost_data[g]['b'] * Pg_MW + cost_data[g]['c']
+
+    # Biaya H2 (jika generator termasuk H2GEN)
+    if g in list(model.H2GEN):
+        h2_cost = pyo.value(model.priceH2[g]) * pyo.value(model.kH2[g]) * Pg_MW
+    else:
+        h2_cost = 0.0
+
+    total_cost += cost_gen + h2_cost
+    total_h2_cost += h2_cost
+    total_gen_cost += cost_gen
+
+    fuel_tag = " (H2)" if g in list(model.H2GEN) else ""
+    print(f"Gen {g}{fuel_tag}: Pg = {Pg_MW:.2f} MW, Qg = {Qg:.2f} Mvar, "
+          f"Cost_gen = {cost_gen:.2f}, H2_cost = {h2_cost:.2f}, Total = {cost_gen + h2_cost:.2f}")
+
+print(f"\nTotal Cost (gen + H2): {total_cost:.2f}")
+print(f"Total H2 Gen cost: {total_h2_cost:.2f}")
+print(f"Total Normal Gen cost: {total_gen_cost:.2f}")
 
 print("9. Hasil Bus Out")
 Vm = np.array([value(model.V[i]) for i in model.BUS])
